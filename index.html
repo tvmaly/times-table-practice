@@ -99,10 +99,11 @@
     }
     #game-container canvas { display: block; }
     #answer-panel {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
       gap: 12px;
       min-height: 0;
+      overflow: hidden;
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -134,14 +135,16 @@
     .keypad {
       display: grid;
       grid-template-columns: repeat(3, minmax(72px, 1fr));
+      grid-template-rows: repeat(4, minmax(44px, 1fr));
       gap: 10px;
+      min-height: 0;
     }
-    .keypad button { min-height: 66px; font-size: 24px; font-weight: 850; }
+    .keypad button { min-height: 44px; height: 100%; font-size: 24px; font-weight: 850; }
     .keypad .wide { grid-column: span 2; }
     .answer-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .answer-actions button { min-height: 64px; font-weight: 850; }
     .answer-actions .primary { grid-column: 1 / -1; font-size: 22px; }
-    .mission-footer { margin-top: auto; display: flex; justify-content: space-between; gap: 10px; }
+    .mission-footer { display: flex; justify-content: space-between; gap: 10px; }
 
     .shop-item, .map-item, .history-row {
       display: grid;
@@ -221,14 +224,24 @@
     @media (max-width: 820px), (orientation: portrait) {
       #mission-screen.active {
         grid-template-columns: 1fr;
-        grid-template-rows: minmax(270px, 43dvh) minmax(0, 1fr);
+        grid-template-rows: minmax(220px, 30dvh) minmax(0, 1fr);
       }
-      #game-container { min-height: 260px; }
-      #answer-panel { overflow: auto; }
+      #game-container { min-height: 220px; }
       .keypad { grid-template-columns: repeat(3, minmax(64px, 1fr)); }
-      .keypad button { min-height: 60px; }
-      #prompt { min-height: 72px; font-size: 42px; }
-      #answer-display { min-height: 52px; font-size: 30px; }
+    }
+
+    @media (max-width: 820px), (orientation: portrait), (max-height: 900px) {
+      #answer-panel { gap: 6px; padding: 10px; }
+      .mission-meta { gap: 5px; }
+      #prompt { min-height: 64px; font-size: 42px; }
+      #answer-display { min-height: 48px; font-size: 30px; }
+      #feedback { min-height: 26px; }
+      .keypad { gap: 6px; }
+      .keypad button { min-height: 44px; }
+      .answer-actions { gap: 6px; }
+      .answer-actions button { min-height: 44px; }
+      .answer-actions .primary { min-height: 50px; }
+      .mission-footer { gap: 6px; }
     }
   </style>
 </head>
@@ -378,6 +391,22 @@
       return 0;
     };
     const fluencyTarget = (baselineMs) => clamp(baselineMs * .9, 3500, 6500);
+    const bindPress = (button, action) => {
+      let lastTouchAt = -Infinity;
+      button.addEventListener("pointerdown", event => {
+        if (!event.isPrimary || event.pointerType === "mouse") return;
+        event.preventDefault();
+        lastTouchAt = performance.now();
+        action(event);
+      });
+      button.addEventListener("click", event => {
+        if (performance.now() - lastTouchAt < 750) {
+          event.preventDefault();
+          return;
+        }
+        action(event);
+      });
+    };
 
     class RNG {
       constructor(seed = 123456789) { this.seed = seed >>> 0; }
@@ -727,40 +756,21 @@
       neutral() { this.tone(170, .06, "triangle", .018); }
     }
 
-    class BlockBlasterScene extends Phaser.Scene {
-      constructor() { super("BlockBlasterScene"); this.blocks = []; this.fragments = []; }
-      create() {
-        this.bus = window.__bbmBus;
-        this.drawWorld();
-        this.bus.addEventListener("bbm:fire", e => this.fire(e.detail));
-        this.scale.on("resize", () => this.drawWorld());
+    class StructureModel {
+      constructor(pattern, cols, rows) {
+        this.pattern = pattern;
+        this.cols = cols;
+        this.rows = rows;
+        this.cells = StructureModel.cells(pattern, cols, rows);
+        this.remaining = new Set(this.cells.map(cell => cell.id));
       }
-      drawWorld() {
-        const w = this.scale.width, h = this.scale.height;
-        const data = window.__bbmData;
-        const map = APP_CONFIG.maps.find(m => m.id === data.profile.selectedMapId) || APP_CONFIG.maps[0];
-        this.children.removeAll();
-        this.blocks = [];
-        this.add.rectangle(w/2, h/2, w, h, map.sky).setDepth(-10);
-        this.add.rectangle(w/2, h*.83, w, h*.34, map.ground).setDepth(-9);
-        for (let i = 0; i < 22; i++) {
-          const x = (i * 97) % w;
-          const y = h * (.16 + ((i * 31) % 30) / 200);
-          this.add.circle(x, y, 1 + (i % 3), 0xffffff, .22);
-        }
-        this.makeStructure(map.block);
-        this.drawBlaster();
-        this.add.line(w/2, h*.5, -14, 0, 14, 0, 0xffffff, .7).setLineWidth(2);
-        this.add.line(w/2, h*.5, 0, -14, 0, 14, 0xffffff, .7).setLineWidth(2);
+      static create(width, height, random = Math.random) {
+        const cols = clamp(Math.floor(width / 54), 6, 10);
+        const rows = clamp(Math.floor(height / 58), 4, 6);
+        return new StructureModel(Math.floor(random() * 6), cols, rows);
       }
-      makeStructure(color) {
-        const w = this.scale.width, h = this.scale.height;
-        const cols = clamp(Math.floor(w / 54), 6, 10);
-        const rows = clamp(Math.floor(h / 58), 4, 6);
-        const bw = Math.min(42, w / (cols + 4));
-        const bh = Math.min(32, h / 16);
-        const pattern = Math.floor(Math.random() * 6);
-        const startX = w/2 - cols*bw/2, startY = h*.57 - rows*bh/2;
+      static cells(pattern, cols, rows) {
+        const cells = [];
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             let keep = true;
@@ -769,17 +779,105 @@
             if (pattern === 3) keep = c < 2 || c > cols - 3 || r > rows - 3;
             if (pattern === 4) keep = r >= Math.abs(c - cols/2) - 1;
             if (pattern === 5) keep = !(r > rows/2 && c > cols*.4 && c < cols*.6) || r === 0;
-            if (!keep) continue;
-            const rect = this.add.rectangle(startX + c*bw + bw/2, startY + r*bh, bw - 3, bh - 3, color).setStrokeStyle(1, 0xffffff, .25);
-            this.blocks.push(rect);
+            if (keep) cells.push({ id: `${r}:${c}`, r, c });
           }
         }
+        return cells;
+      }
+      aliveCells() { return this.cells.filter(cell => this.remaining.has(cell.id)); }
+      remove(ids) { for (const id of ids) this.remaining.delete(id); }
+      layout(width, height) {
+        const bw = Math.min(42, width / (this.cols + 4));
+        const bh = Math.min(32, height / 16);
+        const startX = width/2 - this.cols*bw/2;
+        const startY = height*.57 - this.rows*bh/2;
+        return this.aliveCells().map(cell => ({
+          ...cell,
+          x: startX + cell.c*bw + bw/2,
+          y: startY + cell.r*bh,
+          width: bw - 3,
+          height: bh - 3
+        }));
+      }
+      signature() { return `${this.pattern}|${this.cols}x${this.rows}|${this.aliveCells().map(cell => cell.id).join(",")}`; }
+    }
+
+    class BlockBlasterScene extends Phaser.Scene {
+      constructor() { super("BlockBlasterScene"); this.blocks = []; this.blockObjects = new Map(); this.structure = null; }
+      create() {
+        this.bus = window.__bbmBus;
+        this.background = this.add.graphics().setDepth(-10);
+        this.blaster = this.add.graphics().setDepth(5);
+        this.crosshair = this.add.graphics().setDepth(10);
+        this.onFire = event => this.fire(event.detail);
+        this.onResize = () => this.drawWorld();
+        this.structure = StructureModel.create(this.scale.width, this.scale.height);
+        this.drawWorld();
+        this.bus.addEventListener("bbm:fire", this.onFire);
+        this.scale.on("resize", this.onResize);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.teardown, this);
+        this.events.once(Phaser.Scenes.Events.DESTROY, this.teardown, this);
+      }
+      teardown() {
+        if (this.cleanedUp) return;
+        this.cleanedUp = true;
+        this.bus?.removeEventListener("bbm:fire", this.onFire);
+        this.scale?.off("resize", this.onResize);
+      }
+      drawWorld() {
+        const w = this.scale.width, h = this.scale.height;
+        if (w <= 0 || h <= 0) return;
+        const data = window.__bbmData;
+        const map = APP_CONFIG.maps.find(m => m.id === data.profile.selectedMapId) || APP_CONFIG.maps[0];
+        this.background.clear();
+        this.background.fillStyle(map.sky, 1).fillRect(0, 0, w, h);
+        this.background.fillStyle(map.ground, 1).fillRect(0, h*.66, w, h*.34);
+        this.background.fillStyle(0xffffff, .22);
+        for (let i = 0; i < 22; i++) {
+          const x = (i * 97) % w;
+          const y = h * (.16 + ((i * 31) % 30) / 200);
+          this.background.fillCircle(x, y, 1 + (i % 3));
+        }
+        this.syncStructure(map.block);
+        this.drawBlaster();
+        this.crosshair.clear();
+        this.crosshair.lineStyle(2, 0xffffff, .7);
+        this.crosshair.lineBetween(w/2 - 14, h*.5, w/2 + 14, h*.5);
+        this.crosshair.lineBetween(w/2, h*.5 - 14, w/2, h*.5 + 14);
+      }
+      syncStructure(color) {
+        const w = this.scale.width, h = this.scale.height;
+        const layout = this.structure.layout(w, h);
+        const alive = new Set(layout.map(cell => cell.id));
+        for (const [id, block] of this.blockObjects) {
+          if (alive.has(id)) continue;
+          block.destroy();
+          this.blockObjects.delete(id);
+        }
+        for (const cell of layout) {
+          let block = this.blockObjects.get(cell.id);
+          if (!block) {
+            block = this.add.rectangle(cell.x, cell.y, cell.width, cell.height, color).setStrokeStyle(1, 0xffffff, .25);
+            block.cellId = cell.id;
+            this.blockObjects.set(cell.id, block);
+          } else {
+            block.setPosition(cell.x, cell.y).setDisplaySize(cell.width, cell.height).setFillStyle(color);
+          }
+        }
+        this.blocks = Array.from(this.blockObjects.values());
+      }
+      newStructure() {
+        for (const block of this.blockObjects.values()) block.destroy();
+        this.blockObjects.clear();
+        this.blocks = [];
+        this.structure = StructureModel.create(this.scale.width, this.scale.height);
       }
       drawBlaster() {
         const w = this.scale.width, h = this.scale.height;
         const data = window.__bbmData;
         const weapon = APP_CONFIG.weapons.find(m => m.id === data.profile.selectedWeaponId) || APP_CONFIG.weapons[0];
-        const g = this.add.graphics();
+        const g = this.blaster;
+        g.clear();
         g.fillStyle(0x0a0e13, 1).fillRoundedRect(w/2 - 70, h - 62, 140, 78, 14);
         g.fillStyle(0x2e3c4f, 1).fillRoundedRect(w/2 - 46, h - 96, 92, 64, 10);
         if (weapon.id === "twin_pulse") {
@@ -791,7 +889,7 @@
       fire(detail) {
         const w = this.scale.width, h = this.scale.height;
         const reduced = window.__bbmData.settings.reducedMotion;
-        const bolt = this.add.circle(w/2, h - 112, detail.power ? 8 : 6, detail.power ? 0xf7c948 : 0x48d4a4);
+        const bolt = this.add.circle(w/2, h - 112, detail.power ? 8 : 6, detail.power ? 0xf7c948 : 0x48d4a4).setDepth(8);
         this.tweens.add({ targets: bolt, x: w/2, y: h*.5, duration: reduced ? 80 : 170, onComplete: () => {
           bolt.destroy();
           this.damage(detail.damage || 1);
@@ -802,12 +900,14 @@
         const w = this.scale.width, h = this.scale.height;
         const sorted = this.blocks.slice().sort((a, b) => Phaser.Math.Distance.Between(a.x, a.y, w/2, h*.5) - Phaser.Math.Distance.Between(b.x, b.y, w/2, h*.5));
         const hit = sorted.slice(0, Math.min(count, sorted.length));
+        this.structure.remove(hit.map(block => block.cellId));
+        for (const block of hit) this.blockObjects.delete(block.cellId);
         this.blocks = this.blocks.filter(b => !hit.includes(b));
         for (const block of hit) {
           this.tweens.add({ targets: block, scale: .1, alpha: 0, angle: Phaser.Math.Between(-45, 45), duration: window.__bbmData.settings.reducedMotion ? 90 : 180, onComplete: () => block.destroy() });
         }
-        if (!this.blocks.length) {
-          this.time.delayedCall(650, () => this.drawWorld());
+        if (!this.structure.remaining.size) {
+          this.time.delayedCall(650, () => { this.newStructure(); this.drawWorld(); });
           window.__bbmBus.dispatchEvent(new CustomEvent("bbm:structure-cleared"));
         }
       }
@@ -857,9 +957,9 @@
           this.startMission("recon");
         });
         $("play-again").addEventListener("click", () => this.startMission(this.lastMissionType === "recon" ? "quick" : this.lastMissionType));
-        $("fire").addEventListener("click", () => this.submit(false));
-        $("dont-know").addEventListener("click", () => this.submit(true));
-        $("backspace").addEventListener("click", () => this.setAnswer(this.answer.slice(0, -1)));
+        bindPress($("fire"), () => this.submit(false));
+        bindPress($("dont-know"), () => this.submit(true));
+        bindPress($("backspace"), () => this.setAnswer(this.answer.slice(0, -1)));
         $("pause-mission").addEventListener("click", () => this.pause());
         $("end-mission").addEventListener("click", () => this.finishMission(true));
         $("reset-progress").addEventListener("click", () => {
@@ -888,7 +988,7 @@
       key(n) {
         const b = document.createElement("button");
         b.textContent = String(n);
-        b.addEventListener("click", () => this.inputDigit(String(n)));
+        bindPress(b, () => this.inputDigit(String(n)));
         $("keypad").appendChild(b);
       }
       show(id) {
@@ -901,7 +1001,6 @@
         if (id === "shop-screen") this.renderShop();
         if (id === "dashboard-screen") this.renderDashboard();
         if (id === "settings-screen") this.renderSettings();
-        if (id === "mission-screen" && this.phaser) setTimeout(() => this.phaser.scale.refresh(), 20);
       }
       renderHome() {
         $("home-coins").textContent = this.data.economy.coins;
@@ -927,6 +1026,7 @@
       map() { return APP_CONFIG.maps.find(m => m.id === this.data.profile.selectedMapId) || APP_CONFIG.maps[0]; }
       startMission(type) {
         this.audio.unlock();
+        this.destroyPhaser();
         this.lastMissionType = type;
         const baselineMs = MasteryEngine.baseline(this.data);
         const session = {
@@ -950,8 +1050,22 @@
         this.startTick();
       }
       ensurePhaser() {
-        if (this.phaser) return;
-        this.phaser = new Phaser.Game({ type: Phaser.AUTO, parent: "game-container", backgroundColor: "#0b1016", scale: { mode: Phaser.Scale.RESIZE, width: "100%", height: "100%" }, scene: BlockBlasterScene, audio: { noAudio: true } });
+        if (this.phaser || !$("mission-screen").classList.contains("active")) return;
+        const container = $("game-container");
+        if (!container.clientWidth || !container.clientHeight) {
+          this.phaserInitFrame = requestAnimationFrame(() => this.ensurePhaser());
+          return;
+        }
+        this.phaserInitFrame = null;
+        this.phaser = new Phaser.Game({ type: Phaser.AUTO, parent: "game-container", backgroundColor: "#0b1016", scale: { mode: Phaser.Scale.RESIZE, width: container.clientWidth, height: container.clientHeight }, scene: BlockBlasterScene, audio: { noAudio: true } });
+      }
+      destroyPhaser() {
+        if (this.phaserInitFrame) cancelAnimationFrame(this.phaserInitFrame);
+        this.phaserInitFrame = null;
+        if (!this.phaser) return;
+        this.phaser.destroy(true);
+        this.phaser = null;
+        $("game-container").replaceChildren();
       }
       startTick() {
         clearInterval(this.tick);
@@ -1096,6 +1210,7 @@
         this.data.activeSession = null;
         this.storage.save();
         this.renderSummary();
+        this.destroyPhaser();
         this.session = null;
         this.show("mission-summary");
       }
@@ -1250,6 +1365,38 @@
           ["adjusted response time", () => { this.assert(adjustedTime(4200, 56) === 3950, "two digits"); this.assert(adjustedTime(800, 144) === 500, "floor"); }],
           ["baseline and target clamps", () => { this.assert(fluencyTarget(10000) === 6500, "high clamp"); this.assert(fluencyTarget(3000) === 3500, "low clamp"); }],
           ["damage tiers", () => { this.assert(speedBonus(3000, 6500) === 3, "tier 3"); this.assert(speedBonus(9000, 6500) === 0, "tier 0"); }],
+          ["touch press fires once", () => {
+            const button = document.createElement("button");
+            let presses = 0;
+            bindPress(button, () => presses++);
+            button.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", isPrimary: true, bubbles: true, cancelable: true }));
+            button.click();
+            this.assert(presses === 1, `expected one press, got ${presses}`);
+          }],
+          ["click press fallback", () => {
+            const button = document.createElement("button");
+            let presses = 0;
+            bindPress(button, () => presses++);
+            button.click();
+            this.assert(presses === 1, `expected one click, got ${presses}`);
+          }],
+          ["structure blueprint survives resize", () => {
+            const structure = new StructureModel(3, 8, 5);
+            const before = structure.signature();
+            const portraitIds = structure.layout(600, 700).map(cell => cell.id).join(",");
+            const landscapeIds = structure.layout(900, 420).map(cell => cell.id).join(",");
+            this.assert(portraitIds === landscapeIds, "resize changed cells");
+            this.assert(structure.signature() === before, "resize changed blueprint");
+          }],
+          ["structure damage survives resize", () => {
+            const structure = new StructureModel(5, 10, 6);
+            const removed = structure.aliveCells().slice(0, 3).map(cell => cell.id);
+            structure.remove(removed);
+            const portraitIds = structure.layout(600, 700).map(cell => cell.id);
+            const landscapeIds = structure.layout(900, 420).map(cell => cell.id);
+            this.assert(removed.every(id => !portraitIds.includes(id)), "removed cells returned");
+            this.assert(portraitIds.join(",") === landscapeIds.join(","), "damage changed on resize");
+          }],
           ["storage default completeness", () => { const s = new StorageService(); this.assert(Object.keys(s.data.orderedFacts).length === 169, "ordered defaults"); this.assert(Object.keys(s.data.factFamilies).length === 91, "family defaults"); }],
           ["new to learning", () => { const st = new StorageService(); const session = { id: "t", fluencyTargetMs: 6500 }; MasteryEngine.record(st.data, { at: new Date().toISOString(), sessionId: "t", a: 2, b: 3, correct: false, usedHelp: false, rawMs: 4000, adjustedMs: null, wasDueReview: false, source: "adaptive" }, session); this.assert(st.data.factFamilies["2x3"].state === "learning", "learning"); }],
           ["both orientations required", () => { const st = new StorageService(); const session = { id: "a", fluencyTargetMs: 6500 }; for (let i = 0; i < 6; i++) MasteryEngine.record(st.data, { at: new Date(Date.now()+i).toISOString(), sessionId: i < 3 ? "a" : "b", a: 7, b: 8, correct: true, usedHelp: false, rawMs: 3000, adjustedMs: 2750, wasDueReview: false, source: "adaptive" }, session); this.assert(st.data.factFamilies["7x8"].state !== "fluent", "needs 8x7"); }],
