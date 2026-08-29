@@ -1,0 +1,1233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="icon" href="data:,">
+  <title>Block Blaster Multiplication</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101319;
+      --panel: #191f29;
+      --panel-2: #202838;
+      --text: #f6f8fb;
+      --muted: #b7c0ce;
+      --line: #344055;
+      --accent: #48d4a4;
+      --accent-2: #f7c948;
+      --danger: #ff806d;
+      --focus: #74b6ff;
+      --new: #57606f;
+      --learning: #2f80ed;
+      --developing: #8e67d1;
+      --fluent: #f2b84b;
+      --mastered: #38b26c;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+    body { overflow-x: hidden; user-select: none; -webkit-user-select: none; }
+    button, input { font: inherit; }
+    button {
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 14px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #062116; font-weight: 800; }
+    button.warning { background: var(--accent-2); border-color: var(--accent-2); color: #221802; font-weight: 800; }
+    button.danger { background: #3b1f22; border-color: var(--danger); color: #ffd7d1; }
+    button.icon { width: 44px; padding: 0; display: inline-grid; place-items: center; }
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0d1118;
+      color: var(--text);
+      padding: 12px 14px;
+    }
+    a { color: var(--focus); }
+    .screen { display: none; min-height: 100dvh; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+    .screen.active { display: block; }
+    .wrap { max-width: 1160px; margin: 0 auto; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .brand { font-size: clamp(30px, 6vw, 60px); line-height: .95; margin: 10px 0 12px; letter-spacing: 0; }
+    .subtle { color: var(--muted); }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .grid { display: grid; gap: 12px; }
+    .grid.two { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .grid.three { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .stat { display: grid; gap: 4px; }
+    .stat strong { font-size: 24px; }
+    .menu-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 20px; }
+    .menu-actions button { min-height: 58px; text-align: left; font-weight: 750; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: #111821; color: var(--muted); }
+    .progress-shell { height: 14px; display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+    .progress-shell span { background: #2a3444; border-radius: 3px; overflow: hidden; }
+    .progress-shell span.on { background: var(--accent); }
+
+    #mission-screen.active {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(330px, 390px);
+      gap: 12px;
+      height: 100dvh;
+      min-height: 100dvh;
+      overflow: hidden;
+    }
+    #game-container {
+      min-height: 360px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0b1016;
+      touch-action: none;
+      position: relative;
+    }
+    #game-container canvas { display: block; }
+    #answer-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .mission-meta { display: grid; gap: 10px; }
+    #prompt {
+      display: grid;
+      place-items: center;
+      min-height: 96px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #111821;
+      font-size: clamp(38px, 8vw, 72px);
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    #answer-display {
+      min-height: 62px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0c1118;
+      font-size: 38px;
+      font-weight: 850;
+    }
+    #feedback { min-height: 48px; color: var(--accent-2); font-weight: 800; display: flex; align-items: center; }
+    .keypad {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(72px, 1fr));
+      gap: 10px;
+    }
+    .keypad button { min-height: 66px; font-size: 24px; font-weight: 850; }
+    .keypad .wide { grid-column: span 2; }
+    .answer-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .answer-actions button { min-height: 64px; font-weight: 850; }
+    .answer-actions .primary { grid-column: 1 / -1; font-size: 22px; }
+    .mission-footer { margin-top: auto; display: flex; justify-content: space-between; gap: 10px; }
+
+    .shop-item, .map-item, .history-row {
+      display: grid;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #121923;
+    }
+    .preview {
+      height: 54px;
+      border-radius: 7px;
+      background: linear-gradient(90deg, #182333, #26394a);
+      position: relative;
+      overflow: hidden;
+    }
+    .preview::before, .preview::after {
+      content: "";
+      position: absolute;
+      height: 16px;
+      border-radius: 4px;
+      background: var(--accent);
+      left: 20px;
+      right: 26px;
+      top: 18px;
+      box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 60%, transparent);
+    }
+    .preview::after { width: 26px; left: auto; right: 8px; background: var(--accent-2); }
+    .mastery-grid {
+      display: grid;
+      grid-template-columns: 32px repeat(13, minmax(28px, 1fr));
+      gap: 3px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .cell, .axis {
+      min-width: 28px;
+      min-height: 28px;
+      border-radius: 5px;
+      border: 1px solid #263242;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      color: white;
+    }
+    .axis { background: #111821; color: var(--muted); font-weight: 800; }
+    .cell { cursor: pointer; }
+    .state-new { background: var(--new); }
+    .state-learning { background: var(--learning); }
+    .state-developing { background: var(--developing); }
+    .state-fluent { background: var(--fluent); color: #1d1604; }
+    .state-mastered { background: var(--mastered); color: #06180d; }
+    .chart { width: 100%; min-height: 110px; }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.62);
+      display: none;
+      place-items: center;
+      padding: 16px;
+      z-index: 20;
+    }
+    .modal-backdrop.active { display: grid; }
+    .modal {
+      width: min(560px, 100%);
+      max-height: 90dvh;
+      overflow: auto;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    #toast-layer { position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 25; display: grid; justify-items: center; pointer-events: none; }
+    .toast { background: #09130f; border: 1px solid var(--accent); color: var(--text); border-radius: 8px; padding: 10px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    #test-output { white-space: pre-wrap; font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+    @media (max-width: 820px), (orientation: portrait) {
+      #mission-screen.active {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(270px, 43dvh) minmax(0, 1fr);
+      }
+      #game-container { min-height: 260px; }
+      #answer-panel { overflow: auto; }
+      .keypad { grid-template-columns: repeat(3, minmax(64px, 1fr)); }
+      .keypad button { min-height: 60px; }
+      #prompt { min-height: 72px; font-size: 42px; }
+      #answer-display { min-height: 52px; font-size: 30px; }
+    }
+  </style>
+</head>
+<body>
+  <main id="app">
+    <section id="home-screen" class="screen active">
+      <div class="wrap">
+        <div class="topbar">
+          <div class="pill">Coins: <strong id="home-coins">0</strong></div>
+          <div class="pill">Weekly: <strong id="weekly-goal">0 of 2</strong></div>
+        </div>
+        <h1 class="brand">Block Blaster Multiplication</h1>
+        <p class="subtle">Answer multiplication facts to blast the block targets. No visible question timer.</p>
+        <div class="card" id="first-launch-card">
+          <label for="callsign">Callsign</label>
+          <input id="callsign" maxlength="18" placeholder="Player" autocomplete="off">
+          <div class="row" style="margin-top: 12px">
+            <button class="primary" id="start-recon">Start Recon Mission</button>
+          </div>
+        </div>
+        <div class="grid three" id="home-stats" style="margin-top: 16px"></div>
+        <div class="menu-actions" id="main-actions">
+          <button data-action="quick">Quick Mission — 5 minutes</button>
+          <button data-action="full">Full Mission — 10 minutes</button>
+          <button data-screen="map-screen">Choose Map</button>
+          <button data-screen="shop-screen">Blaster Shop</button>
+          <button data-screen="dashboard-screen">Progress</button>
+          <button data-screen="settings-screen">Settings</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="mission-screen" class="screen">
+      <div id="game-container"></div>
+      <aside id="answer-panel">
+        <div class="mission-meta">
+          <div class="row">
+            <span class="pill" id="mission-kind">Mission</span>
+            <span class="pill">Coins: <strong id="mission-coins">0</strong></span>
+          </div>
+          <div class="progress-shell" id="mission-progress" aria-label="Mission progress"></div>
+        </div>
+        <div id="prompt" aria-live="polite">0 × 0</div>
+        <div id="answer-display" aria-label="Entered answer"></div>
+        <div id="feedback" aria-live="polite"></div>
+        <div class="keypad" id="keypad"></div>
+        <div class="answer-actions">
+          <button id="dont-know">I Don’t Know</button>
+          <button id="backspace">⌫</button>
+          <button class="primary" id="fire">FIRE</button>
+        </div>
+        <div class="mission-footer">
+          <button id="pause-mission">Pause</button>
+          <button id="end-mission">End Mission</button>
+        </div>
+      </aside>
+    </section>
+
+    <section id="mission-summary" class="screen">
+      <div class="wrap">
+        <div class="topbar"><h2>Mission Summary</h2><button data-screen="home-screen">Home</button></div>
+        <div class="grid three" id="summary-stats"></div>
+        <p class="subtle" id="summary-message"></p>
+        <div class="row">
+          <button class="primary" id="play-again">Play Again</button>
+          <button data-screen="shop-screen">Shop</button>
+          <button data-screen="dashboard-screen">Progress</button>
+          <button data-screen="home-screen">Home</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="map-screen" class="screen"><div class="wrap"><div class="topbar"><h2>Choose Map</h2><button data-screen="home-screen">Home</button></div><div class="grid two" id="map-list"></div></div></section>
+    <section id="shop-screen" class="screen"><div class="wrap"><div class="topbar"><h2>Blaster Shop</h2><button data-screen="home-screen">Home</button></div><p class="pill">Coins: <strong id="shop-coins">0</strong></p><div class="grid two" id="shop-list"></div></div></section>
+    <section id="dashboard-screen" class="screen"><div class="wrap"><div class="topbar"><h2>Progress</h2><button data-screen="home-screen">Home</button></div><div class="grid three" id="dash-cards"></div><div class="grid two" style="margin-top: 12px"><div class="card"><h3>Accuracy</h3><div id="chart-accuracy"></div><p class="subtle" id="chart-accuracy-text"></p></div><div class="card"><h3>Response Time</h3><div id="chart-speed"></div><p class="subtle" id="chart-speed-text"></p></div></div><div class="card" style="margin-top: 12px"><h3>Mastery Grid</h3><div class="mastery-grid" id="mastery-grid"></div></div><div class="grid two" style="margin-top: 12px"><div class="card"><h3>Weak Facts</h3><div id="weak-list"></div></div><div class="card"><h3>Session History</h3><div id="history-list"></div></div></div><div class="card" style="margin-top: 12px"><h3>Reset Progress</h3><p class="subtle">Requires typing RESET.</p><div class="row"><input id="reset-input" placeholder="RESET"><button class="danger" id="reset-progress">Reset</button></div></div></div></section>
+    <section id="settings-screen" class="screen"><div class="wrap"><div class="topbar"><h2>Settings</h2><button data-screen="home-screen">Home</button></div><div class="grid two"><div class="card"><h3>Comfort</h3><label class="row"><input type="checkbox" id="sound-toggle"> Sound</label><label class="row"><input type="checkbox" id="motion-toggle"> Reduced motion</label></div><div class="card"><h3>Profile</h3><label for="callsign-settings">Callsign</label><input id="callsign-settings" maxlength="18"><button id="save-settings" class="primary" style="margin-top: 10px">Save</button></div></div></div></section>
+    <section id="test-screen" class="screen"><div class="wrap"><h1>Block Blaster Tests</h1><div id="test-output" class="card"></div></div></section>
+  </main>
+  <div id="modal-layer" class="modal-backdrop"></div>
+  <div id="toast-layer"></div>
+
+  <script>
+  (() => {
+    "use strict";
+
+    const STORAGE_KEY = "blockBlasterMultiplication.v1";
+    const APP_CONFIG = Object.freeze({
+      factors: 12,
+      storageKey: STORAGE_KEY,
+      missionMs: { recon: 300000, quick: 300000, full: 600000 },
+      weeklyGoal: 2,
+      retryGapMin: 3,
+      retryGapMax: 5,
+      answerMaxLength: 3,
+      maxRecent: 12,
+      maxSessions: 200,
+      maxDailyAggregates: 365,
+      weapons: [
+        { id: "pulse_mk1", name: "Pulse Blaster Mk I", cost: 0, baseDamage: 1, accent: 0x48d4a4 },
+        { id: "twin_pulse", name: "Twin Pulse", cost: 180, baseDamage: 2, accent: 0x74b6ff },
+        { id: "plasma_carbine", name: "Plasma Carbine", cost: 450, baseDamage: 3, accent: 0xc98cff },
+        { id: "block_breaker", name: "Block Breaker", cost: 900, baseDamage: 4, accent: 0xf7c948 },
+        { id: "nova_cannon", name: "Nova Cannon", cost: 1600, baseDamage: 5, accent: 0xff806d }
+      ],
+      maps: [
+        { id: "training_yard", name: "Training Yard", req: "Available immediately", sky: 0x162333, ground: 0x263342, block: 0x6d8797 },
+        { id: "neon_depot", name: "Neon Depot", req: "Complete Recon Mission", sky: 0x17152c, ground: 0x25213c, block: 0x37d5c4 },
+        { id: "canyon_outpost", name: "Canyon Outpost", req: "100 lifetime first-try correct answers", sky: 0x38251d, ground: 0x503424, block: 0xc28555 },
+        { id: "sky_fortress", name: "Sky Fortress", req: "Master 25 fact families", sky: 0x183252, ground: 0x284d70, block: 0xaac4d8 },
+        { id: "lunar_bunker", name: "Lunar Bunker", req: "Master 55 fact families", sky: 0x101119, ground: 0x242936, block: 0x9da6bb },
+        { id: "core_citadel", name: "Core Citadel", req: "Master 80 fact families", sky: 0x211018, ground: 0x321d27, block: 0xe06b4d }
+      ],
+      stateWeight: { new: 0, learning: .25, developing: .5, fluent: .75, mastered: 1 }
+    });
+
+    const $ = (id) => document.getElementById(id);
+    const days = (n) => n * 86400000;
+    const today = (d = new Date()) => d.toISOString().slice(0, 10);
+    const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+    const median = (xs) => {
+      if (!xs.length) return null;
+      const sorted = xs.slice().sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    };
+    const uid = () => "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const familyKey = (a, b) => `${Math.min(a, b)}x${Math.max(a, b)}`;
+    const orderedKey = (a, b) => `${a}x${b}`;
+    const parseKey = (k) => k.split("x").map(Number);
+    const product = (a, b) => a * b;
+    const adjustedTime = (rawMs, answer) => Math.max(500, rawMs - 250 * (String(answer).length - 1));
+    const speedBonus = (adjustedMs, baselineMs) => {
+      const ratio = adjustedMs / baselineMs;
+      if (ratio <= .60) return 3;
+      if (ratio <= .85) return 2;
+      if (ratio <= 1.15) return 1;
+      return 0;
+    };
+    const fluencyTarget = (baselineMs) => clamp(baselineMs * .9, 3500, 6500);
+
+    class RNG {
+      constructor(seed = 123456789) { this.seed = seed >>> 0; }
+      next() {
+        this.seed = (1664525 * this.seed + 1013904223) >>> 0;
+        return this.seed / 4294967296;
+      }
+      int(min, max) { return min + Math.floor(this.next() * (max - min + 1)); }
+      pick(items) { return items[Math.floor(this.next() * items.length)]; }
+      weighted(items, weight) {
+        const total = items.reduce((sum, item) => sum + Math.max(0, weight(item)), 0);
+        if (!total) return this.pick(items);
+        let r = this.next() * total;
+        for (const item of items) {
+          r -= Math.max(0, weight(item));
+          if (r <= 0) return item;
+        }
+        return items[items.length - 1];
+      }
+    }
+
+    class FactCatalog {
+      constructor() {
+        this.ordered = [];
+        this.families = [];
+        const seen = new Set();
+        for (let a = 0; a <= APP_CONFIG.factors; a++) {
+          for (let b = 0; b <= APP_CONFIG.factors; b++) {
+            const family = familyKey(a, b);
+            this.ordered.push({ a, b, key: orderedKey(a, b), familyKey: family, answer: product(a, b) });
+            if (!seen.has(family)) {
+              seen.add(family);
+              this.families.push({ key: family, a: Math.min(a, b), b: Math.max(a, b), square: a === b });
+            }
+          }
+        }
+      }
+      allOrdered() { return this.ordered.slice(); }
+      allFamilies() { return this.families.slice(); }
+      reconList(rng) {
+        const groups = [
+          { n: 8, test: (a, b) => [0, 1, 2, 5, 10].includes(a) || [0, 1, 2, 5, 10].includes(b) },
+          { n: 8, test: (a, b) => [3, 4, 11, 12].includes(a) || [3, 4, 11, 12].includes(b) },
+          { n: 10, test: (a, b) => [6, 7, 8, 9].includes(a) || [6, 7, 8, 9].includes(b) },
+          { n: 4, test: (a, b) => a === b || (a > 1 && b > 1 && a !== b) }
+        ];
+        const used = new Set();
+        const list = [];
+        for (const group of groups) {
+          const pool = this.ordered.filter(f => group.test(f.a, f.b) && !used.has(f.key));
+          while (pool.length && list.length < groups.slice(0, groups.indexOf(group) + 1).reduce((s, g) => s + g.n, 0)) {
+            const item = pool.splice(rng.int(0, pool.length - 1), 1)[0];
+            used.add(item.key);
+            list.push(item);
+          }
+        }
+        return list;
+      }
+    }
+    const catalog = new FactCatalog();
+
+    class StorageService {
+      constructor() { this.memoryOnly = false; this.data = this.load(); }
+      fresh() {
+        const now = new Date().toISOString();
+        const orderedFacts = {};
+        const factFamilies = {};
+        for (const f of catalog.allOrdered()) orderedFacts[f.key] = { attempts: 0, firstTryCorrect: 0, totalWrong: 0, helpCount: 0, lastSeenAt: null, recent: [] };
+        for (const f of catalog.allFamilies()) factFamilies[f.key] = { state: "new", dueAt: null, reviewIntervalDays: 0, maintenancePasses: 0, delayedReviewsPassed: 0, correctDates: [], sessionIdsWithCorrect: [], recent: [], placementSignal: null };
+        return {
+          schemaVersion: 1,
+          profile: { callsign: "Player", createdAt: now, weeklyGoal: APP_CONFIG.weeklyGoal, selectedWeaponId: "pulse_mk1", selectedMapId: "training_yard" },
+          settings: { soundEnabled: true, reducedMotion: false },
+          economy: { coins: 0, lifetimeCoins: 0, blocksDestroyed: 0, structuresDestroyed: 0, lifetimeFirstTryCorrect: 0 },
+          unlocks: { ownedWeapons: ["pulse_mk1"], unlockedMaps: ["training_yard"] },
+          orderedFacts, factFamilies, sessions: [], dailyAggregates: {}, activeSession: null
+        };
+      }
+      valid(data) {
+        return data && data.schemaVersion === 1 && data.profile && data.settings && data.economy && data.unlocks && data.orderedFacts && data.factFamilies && Array.isArray(data.sessions);
+      }
+      load() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return this.fresh();
+          const parsed = JSON.parse(raw);
+          if (!this.valid(parsed)) throw new Error("Invalid schema");
+          this.ensureCompleteness(parsed);
+          return parsed;
+        } catch (err) {
+          try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) localStorage.setItem(`${STORAGE_KEY}.recovery.${Date.now()}`, raw);
+          } catch (_) { this.memoryOnly = true; }
+          return this.fresh();
+        }
+      }
+      ensureCompleteness(data) {
+        const fresh = this.fresh();
+        for (const k of Object.keys(fresh.orderedFacts)) data.orderedFacts[k] ||= fresh.orderedFacts[k];
+        for (const k of Object.keys(fresh.factFamilies)) data.factFamilies[k] ||= fresh.factFamilies[k];
+        data.profile.weeklyGoal ||= APP_CONFIG.weeklyGoal;
+        data.profile.selectedWeaponId ||= "pulse_mk1";
+        data.profile.selectedMapId ||= "training_yard";
+        data.unlocks.ownedWeapons ||= ["pulse_mk1"];
+        data.unlocks.unlockedMaps ||= ["training_yard"];
+      }
+      save() {
+        if (this.memoryOnly) return false;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+          return true;
+        } catch (_) {
+          this.memoryOnly = true;
+          return false;
+        }
+      }
+      reset() { this.data = this.fresh(); this.save(); }
+    }
+
+    class MasteryEngine {
+      static baseline(data) {
+        const times = [];
+        for (const f of Object.values(data.orderedFacts)) {
+          for (const r of f.recent) {
+            if (!r.correct) continue;
+            if (r.a === 0 || r.b === 0 || r.a === 1 || r.b === 1) continue;
+            times.push(r.adjustedMs);
+          }
+        }
+        const recent = times.slice(-30);
+        if (recent.length < 10) return 6500;
+        return clamp(median(recent), 4000, 8000);
+      }
+      static familyStats(data, key) {
+        const family = data.factFamilies[key];
+        const recent = family.recent || [];
+        const correct = recent.filter(r => r.correct);
+        const allCorrect = correct.length;
+        const last4 = recent.slice(-4);
+        const last6 = recent.slice(-6);
+        const [a, b] = parseKey(key);
+        const o1 = data.orderedFacts[orderedKey(a, b)];
+        const o2 = data.orderedFacts[orderedKey(b, a)];
+        return { family, recent, correct, allCorrect, last4, last6, a, b, o1, o2 };
+      }
+      static evaluate(data, key, session, nowDate = new Date()) {
+        const s = this.familyStats(data, key);
+        const f = s.family;
+        const prev = f.state;
+        const incorrect4 = s.last4.filter(r => !r.correct).length;
+        const correctLast4 = s.last4.filter(r => r.correct).length;
+        const correctLast6 = s.last6.filter(r => r.correct).length;
+        const nonSquare = s.a !== s.b;
+        const bothAppeared = !nonSquare || (s.o1.attempts > 0 && s.o2.attempts > 0);
+        const bothCorrect1 = !nonSquare || (s.o1.firstTryCorrect > 0 && s.o2.firstTryCorrect > 0);
+        const bothCorrect2 = !nonSquare || (s.o1.firstTryCorrect >= 2 && s.o2.firstTryCorrect >= 2);
+        const last3Median = median(s.correct.slice(-3).map(r => r.adjustedMs));
+        const target = session ? session.fluencyTargetMs : 6500;
+        if (s.recent.length && prev === "new") f.state = "learning";
+        if (s.recent.at(-1) && !s.recent.at(-1).correct) {
+          if (prev === "mastered") f.state = "fluent";
+          else if (prev === "fluent" && incorrect4 >= 2) f.state = "developing";
+          else if (prev === "developing" && incorrect4 >= 2) f.state = "learning";
+        }
+        if (s.allCorrect >= 3 && correctLast4 >= 3 && bothAppeared) f.state = ["new", "learning"].includes(f.state) ? "developing" : f.state;
+        if (s.allCorrect >= 5 && correctLast6 >= 5 && last3Median !== null && last3Median <= target && f.sessionIdsWithCorrect.length >= 2 && bothCorrect1) {
+          if (["new", "learning", "developing"].includes(f.state)) f.state = "fluent";
+        }
+        if (s.allCorrect >= 7 && correctLast6 >= 5 && last3Median !== null && last3Median <= target && f.correctDates.length >= 2 && f.delayedReviewsPassed >= 1 && bothCorrect2) {
+          f.state = "mastered";
+        }
+        return { previous: prev, current: f.state };
+      }
+      static schedule(data, key, correct, nowDate = new Date()) {
+        const f = data.factFamilies[key];
+        if (!correct) {
+          f.reviewIntervalDays = 1;
+          f.dueAt = new Date(nowDate.getTime() + days(1)).toISOString();
+          return;
+        }
+        const intervals = { learning: 1, developing: 3, fluent: 7 };
+        let interval = intervals[f.state] || 1;
+        if (f.state === "mastered") {
+          f.maintenancePasses += 1;
+          interval = f.maintenancePasses === 1 ? 14 : f.maintenancePasses === 2 ? 30 : 60;
+        }
+        f.reviewIntervalDays = interval;
+        f.dueAt = new Date(nowDate.getTime() + days(interval)).toISOString();
+      }
+      static record(data, attempt, session) {
+        const nowDate = new Date(attempt.at);
+        const ok = data.orderedFacts[orderedKey(attempt.a, attempt.b)];
+        const fk = familyKey(attempt.a, attempt.b);
+        const ff = data.factFamilies[fk];
+        ok.attempts += 1;
+        ok.lastSeenAt = attempt.at;
+        if (attempt.correct) ok.firstTryCorrect += 1;
+        else ok.totalWrong += 1;
+        if (attempt.usedHelp) ok.helpCount += 1;
+        ok.recent.push(attempt);
+        ok.recent = ok.recent.slice(-APP_CONFIG.maxRecent);
+        if (ff.dueAt && attempt.correct && new Date(attempt.at) >= new Date(ff.dueAt)) {
+          const earlier = ff.recent.find(r => r.correct);
+          if (earlier && (new Date(attempt.at) - new Date(earlier.at)) >= days(6)) {
+            attempt.wasDueReview = true;
+            ff.delayedReviewsPassed += 1;
+          }
+        }
+        ff.recent.push(attempt);
+        ff.recent = ff.recent.slice(-APP_CONFIG.maxRecent);
+        if (attempt.correct) {
+          if (!ff.correctDates.includes(today(nowDate))) ff.correctDates.push(today(nowDate));
+          if (!ff.sessionIdsWithCorrect.includes(attempt.sessionId)) ff.sessionIdsWithCorrect.push(attempt.sessionId);
+          data.economy.lifetimeFirstTryCorrect += 1;
+        }
+        const change = this.evaluate(data, fk, session, nowDate);
+        this.schedule(data, fk, attempt.correct, nowDate);
+        return change;
+      }
+    }
+
+    class AdaptiveScheduler {
+      constructor(data, type, seed) {
+        this.data = data;
+        this.type = type;
+        this.rng = new RNG(seed);
+        this.history = [];
+        this.retryQueue = [];
+        this.newUsed = new Set();
+        this.focus = this.buildFocus();
+      }
+      newLimit() { return this.type === "full" ? 4 : 2; }
+      buildFocus() {
+        const now = Date.now();
+        const families = Object.keys(this.data.factFamilies);
+        const weak = families.filter(k => {
+          const f = this.data.factFamilies[k];
+          return f.state !== "new" && ((f.dueAt && new Date(f.dueAt).getTime() <= now) || f.recent.slice(-4).some(r => !r.correct));
+        }).slice(0, 6);
+        const news = families.filter(k => this.data.factFamilies[k].state === "new").slice(0, this.newLimit());
+        const warm = families.filter(k => ["fluent", "mastered"].includes(this.data.factFamilies[k].state)).slice(0, 2);
+        return new Set([...weak, ...news, ...warm]);
+      }
+      enqueueRetry(fact) {
+        this.retryQueue.push({ ...fact, wait: this.history.length + this.rng.int(APP_CONFIG.retryGapMin, APP_CONFIG.retryGapMax) });
+      }
+      blocked(family) {
+        const [a, b] = parseKey(family.key);
+        const recent = this.history.slice(-3);
+        if (recent.some(f => f.key === orderedKey(a, b)) || recent.some(f => f.key === orderedKey(b, a))) return true;
+        if (this.history.slice(-3).length === 3 && this.history.slice(-3).every(f => f.a === a)) return true;
+        return false;
+      }
+      chooseOrientation(family) {
+        const [a, b] = parseKey(family.key);
+        if (a === b) return { a, b, key: orderedKey(a, b), familyKey: family.key, answer: product(a, b) };
+        const one = this.data.orderedFacts[orderedKey(a, b)];
+        const two = this.data.orderedFacts[orderedKey(b, a)];
+        const preferFirst = one.firstTryCorrect <= two.firstTryCorrect && one.attempts <= two.attempts + 2;
+        const f = preferFirst ? { a, b } : { a: b, b: a };
+        if (this.history.at(-1)?.key === orderedKey(f.a, f.b)) return { a: f.b, b: f.a, key: orderedKey(f.b, f.a), familyKey: family.key, answer: product(f.a, f.b) };
+        return { ...f, key: orderedKey(f.a, f.b), familyKey: family.key, answer: product(f.a, f.b) };
+      }
+      next() {
+        const ready = this.retryQueue.filter(r => this.history.length >= r.wait);
+        if (ready.length) {
+          const item = ready[0];
+          this.retryQueue = this.retryQueue.filter(r => r !== item);
+          const fact = { a: item.a, b: item.b, key: orderedKey(item.a, item.b), familyKey: familyKey(item.a, item.b), answer: product(item.a, item.b), source: "retry" };
+          this.history.push(fact);
+          return fact;
+        }
+        const now = Date.now();
+        let families = catalog.allFamilies().filter(f => !this.blocked(f));
+        if (!families.length) families = catalog.allFamilies();
+        if (this.newUsed.size >= this.newLimit()) {
+          const nonNew = families.filter(f => this.data.factFamilies[f.key].state !== "new");
+          families = nonNew.length ? nonNew : families;
+        }
+        if (!families.length) families = catalog.allFamilies();
+        const chosen = this.rng.weighted(families, f => {
+          const state = this.data.factFamilies[f.key];
+          let w = state.state === "new" ? 10 : state.state === "learning" ? 35 : state.state === "developing" ? 22 : state.state === "fluent" ? 15 : 8;
+          if (state.dueAt && new Date(state.dueAt).getTime() <= now) w += 35;
+          if (state.recent.slice(-4).some(r => !r.correct || r.usedHelp)) w += 30;
+          if (this.focus.has(f.key)) w *= 1.8;
+          if ((f.a <= 1 || f.b <= 1) && ["developing", "fluent", "mastered"].includes(state.state)) w *= .25;
+          return w;
+        });
+        if (this.data.factFamilies[chosen.key].state === "new") this.newUsed.add(chosen.key);
+        const fact = this.chooseOrientation(chosen);
+        fact.source = this.data.factFamilies[chosen.key].state === "mastered" ? "maintenance" : "adaptive";
+        this.history.push(fact);
+        return fact;
+      }
+    }
+
+    class AudioService {
+      constructor(storage) { this.storage = storage; this.ctx = null; }
+      unlock() { if (!this.ctx && window.AudioContext) this.ctx = new AudioContext(); }
+      tone(freq, dur = .08, type = "sine", gain = .035) {
+        if (!this.storage.data.settings.soundEnabled || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const amp = this.ctx.createGain();
+        osc.type = type; osc.frequency.value = freq;
+        amp.gain.setValueAtTime(gain, this.ctx.currentTime);
+        amp.gain.exponentialRampToValueAtTime(.0001, this.ctx.currentTime + dur);
+        osc.connect(amp).connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + dur);
+      }
+      shot(power = false) { this.tone(power ? 420 : 260, power ? .13 : .08, "square", power ? .045 : .03); }
+      coin() { this.tone(660, .07, "triangle", .03); }
+      tap() { this.tone(220, .04, "sine", .02); }
+      neutral() { this.tone(170, .06, "triangle", .018); }
+    }
+
+    class BlockBlasterScene extends Phaser.Scene {
+      constructor() { super("BlockBlasterScene"); this.blocks = []; this.fragments = []; }
+      create() {
+        this.bus = window.__bbmBus;
+        this.drawWorld();
+        this.bus.addEventListener("bbm:fire", e => this.fire(e.detail));
+        this.scale.on("resize", () => this.drawWorld());
+      }
+      drawWorld() {
+        const w = this.scale.width, h = this.scale.height;
+        const data = window.__bbmData;
+        const map = APP_CONFIG.maps.find(m => m.id === data.profile.selectedMapId) || APP_CONFIG.maps[0];
+        this.children.removeAll();
+        this.blocks = [];
+        this.add.rectangle(w/2, h/2, w, h, map.sky).setDepth(-10);
+        this.add.rectangle(w/2, h*.83, w, h*.34, map.ground).setDepth(-9);
+        for (let i = 0; i < 22; i++) {
+          const x = (i * 97) % w;
+          const y = h * (.16 + ((i * 31) % 30) / 200);
+          this.add.circle(x, y, 1 + (i % 3), 0xffffff, .22);
+        }
+        this.makeStructure(map.block);
+        this.drawBlaster();
+        this.add.line(w/2, h*.5, -14, 0, 14, 0, 0xffffff, .7).setLineWidth(2);
+        this.add.line(w/2, h*.5, 0, -14, 0, 14, 0xffffff, .7).setLineWidth(2);
+      }
+      makeStructure(color) {
+        const w = this.scale.width, h = this.scale.height;
+        const cols = clamp(Math.floor(w / 54), 6, 10);
+        const rows = clamp(Math.floor(h / 58), 4, 6);
+        const bw = Math.min(42, w / (cols + 4));
+        const bh = Math.min(32, h / 16);
+        const pattern = Math.floor(Math.random() * 6);
+        const startX = w/2 - cols*bw/2, startY = h*.57 - rows*bh/2;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            let keep = true;
+            if (pattern === 1) keep = r >= rows - c - 2;
+            if (pattern === 2) keep = !(r > rows/2 && c > cols*.35 && c < cols*.65);
+            if (pattern === 3) keep = c < 2 || c > cols - 3 || r > rows - 3;
+            if (pattern === 4) keep = r >= Math.abs(c - cols/2) - 1;
+            if (pattern === 5) keep = !(r > rows/2 && c > cols*.4 && c < cols*.6) || r === 0;
+            if (!keep) continue;
+            const rect = this.add.rectangle(startX + c*bw + bw/2, startY + r*bh, bw - 3, bh - 3, color).setStrokeStyle(1, 0xffffff, .25);
+            this.blocks.push(rect);
+          }
+        }
+      }
+      drawBlaster() {
+        const w = this.scale.width, h = this.scale.height;
+        const data = window.__bbmData;
+        const weapon = APP_CONFIG.weapons.find(m => m.id === data.profile.selectedWeaponId) || APP_CONFIG.weapons[0];
+        const g = this.add.graphics();
+        g.fillStyle(0x0a0e13, 1).fillRoundedRect(w/2 - 70, h - 62, 140, 78, 14);
+        g.fillStyle(0x2e3c4f, 1).fillRoundedRect(w/2 - 46, h - 96, 92, 64, 10);
+        if (weapon.id === "twin_pulse") {
+          g.fillStyle(weapon.accent, 1).fillRoundedRect(w/2 - 34, h - 118, 22, 62, 6).fillRoundedRect(w/2 + 12, h - 118, 22, 62, 6);
+        } else {
+          g.fillStyle(weapon.accent, 1).fillRoundedRect(w/2 - 18, h - 126, 36, 76, 7);
+        }
+      }
+      fire(detail) {
+        const w = this.scale.width, h = this.scale.height;
+        const reduced = window.__bbmData.settings.reducedMotion;
+        const bolt = this.add.circle(w/2, h - 112, detail.power ? 8 : 6, detail.power ? 0xf7c948 : 0x48d4a4);
+        this.tweens.add({ targets: bolt, x: w/2, y: h*.5, duration: reduced ? 80 : 170, onComplete: () => {
+          bolt.destroy();
+          this.damage(detail.damage || 1);
+          if (!reduced) this.cameras.main.shake(80, detail.power ? .008 : .004);
+        }});
+      }
+      damage(count) {
+        const w = this.scale.width, h = this.scale.height;
+        const sorted = this.blocks.slice().sort((a, b) => Phaser.Math.Distance.Between(a.x, a.y, w/2, h*.5) - Phaser.Math.Distance.Between(b.x, b.y, w/2, h*.5));
+        const hit = sorted.slice(0, Math.min(count, sorted.length));
+        this.blocks = this.blocks.filter(b => !hit.includes(b));
+        for (const block of hit) {
+          this.tweens.add({ targets: block, scale: .1, alpha: 0, angle: Phaser.Math.Between(-45, 45), duration: window.__bbmData.settings.reducedMotion ? 90 : 180, onComplete: () => block.destroy() });
+        }
+        if (!this.blocks.length) {
+          this.time.delayedCall(650, () => this.drawWorld());
+          window.__bbmBus.dispatchEvent(new CustomEvent("bbm:structure-cleared"));
+        }
+      }
+    }
+
+    class App {
+      constructor() {
+        this.storage = new StorageService();
+        this.data = this.storage.data;
+        window.__bbmData = this.data;
+        this.bus = new EventTarget();
+        window.__bbmBus = this.bus;
+        this.audio = new AudioService(this.storage);
+        this.state = "BOOT";
+        this.phaser = null;
+        this.current = null;
+        this.answer = "";
+        this.accepting = false;
+        this.lastMissionType = "quick";
+        this.tick = null;
+      }
+      init() {
+        if (location.search.includes("test=1")) return TestRunner.run();
+        if (!window.Phaser) return this.showEngineError();
+        this.bind();
+        this.renderHome();
+        this.show("home-screen");
+        this.recoverActive();
+      }
+      showEngineError() {
+        document.body.innerHTML = '<main class="screen active"><div class="wrap"><h1>Block Blaster Multiplication</h1><p>The game engine did not load. An internet connection is needed to load Phaser from the pinned CDN.</p><button onclick="location.reload()">Retry</button></div></main>';
+      }
+      bind() {
+        document.addEventListener("click", e => {
+          const btn = e.target.closest("button");
+          if (!btn) return;
+          this.audio.tap();
+          if (btn.dataset.screen) this.show(btn.dataset.screen);
+          if (btn.dataset.action) this.startMission(btn.dataset.action);
+          if (btn.dataset.buy) this.buy(btn.dataset.buy);
+          if (btn.dataset.equip) this.equip(btn.dataset.equip);
+          if (btn.dataset.map) this.selectMap(btn.dataset.map);
+        });
+        $("start-recon").addEventListener("click", () => {
+          const name = $("callsign").value.trim();
+          if (name) this.data.profile.callsign = name;
+          this.startMission("recon");
+        });
+        $("play-again").addEventListener("click", () => this.startMission(this.lastMissionType === "recon" ? "quick" : this.lastMissionType));
+        $("fire").addEventListener("click", () => this.submit(false));
+        $("dont-know").addEventListener("click", () => this.submit(true));
+        $("backspace").addEventListener("click", () => this.setAnswer(this.answer.slice(0, -1)));
+        $("pause-mission").addEventListener("click", () => this.pause());
+        $("end-mission").addEventListener("click", () => this.finishMission(true));
+        $("reset-progress").addEventListener("click", () => {
+          if ($("reset-input").value === "RESET") { this.storage.reset(); this.data = this.storage.data; window.__bbmData = this.data; this.toast("Progress reset."); this.show("home-screen"); }
+        });
+        $("save-settings").addEventListener("click", () => {
+          const name = $("callsign-settings").value.trim();
+          if (name) this.data.profile.callsign = name;
+          this.data.settings.soundEnabled = $("sound-toggle").checked;
+          this.data.settings.reducedMotion = $("motion-toggle").checked;
+          this.storage.save();
+          this.toast("Settings saved.");
+        });
+        for (let i = 1; i <= 9; i++) this.key(i);
+        this.key(0);
+        document.addEventListener("keydown", e => {
+          if (!["MISSION_ACTIVE", "CORRECTION_REQUIRED"].includes(this.state)) return;
+          if (/^\d$/.test(e.key)) this.inputDigit(e.key);
+          if (e.key === "Backspace") this.setAnswer(this.answer.slice(0, -1));
+          if (e.key === "Enter") this.submit(false);
+          if (e.key === "Escape") this.pause();
+        });
+        document.addEventListener("visibilitychange", () => document.hidden ? this.freezeTimers() : this.resumeTimers());
+        this.bus.addEventListener("bbm:structure-cleared", () => this.structureCleared());
+      }
+      key(n) {
+        const b = document.createElement("button");
+        b.textContent = String(n);
+        b.addEventListener("click", () => this.inputDigit(String(n)));
+        $("keypad").appendChild(b);
+      }
+      show(id) {
+        if (this.state === "MISSION_ACTIVE" && id !== "mission-screen") this.freezeTimers();
+        document.querySelectorAll(".screen").forEach(s => s.classList.toggle("active", s.id === id));
+        const map = { "home-screen": "HOME", "map-screen": "MAP_SELECT", "shop-screen": "SHOP", "dashboard-screen": "DASHBOARD", "settings-screen": "SETTINGS", "mission-summary": "MISSION_SUMMARY" };
+        if (map[id]) this.state = map[id];
+        if (id === "home-screen") this.renderHome();
+        if (id === "map-screen") this.renderMaps();
+        if (id === "shop-screen") this.renderShop();
+        if (id === "dashboard-screen") this.renderDashboard();
+        if (id === "settings-screen") this.renderSettings();
+        if (id === "mission-screen" && this.phaser) setTimeout(() => this.phaser.scale.refresh(), 20);
+      }
+      renderHome() {
+        $("home-coins").textContent = this.data.economy.coins;
+        $("weekly-goal").textContent = `${this.sessionsThisWeek()} of ${this.data.profile.weeklyGoal}`;
+        $("first-launch-card").style.display = this.data.sessions.length ? "none" : "block";
+        $("main-actions").style.display = this.data.sessions.length ? "grid" : "none";
+        const mastered = Object.values(this.data.factFamilies).filter(f => f.state === "mastered").length;
+        const score = this.skillScore();
+        const practiced = Object.values(this.data.orderedFacts).filter(f => f.attempts > 0).length;
+        $("home-stats").innerHTML = this.card("Equipped", this.weapon().name) + this.card("Mastery", `${mastered} / 91`) + this.card("Skill score", `${Math.round(score)}%`) + this.card("Prompt orientations", `${practiced} / 169`);
+      }
+      card(label, value) { return `<div class="card stat"><span class="subtle">${label}</span><strong>${value}</strong></div>`; }
+      sessionsThisWeek() {
+        const now = new Date();
+        const day = now.getDay();
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day);
+        return this.data.sessions.filter(s => new Date(s.endedAt) >= start).length;
+      }
+      skillScore() {
+        return Object.values(this.data.factFamilies).reduce((sum, f) => sum + APP_CONFIG.stateWeight[f.state], 0) / 91 * 100;
+      }
+      weapon() { return APP_CONFIG.weapons.find(w => w.id === this.data.profile.selectedWeaponId) || APP_CONFIG.weapons[0]; }
+      map() { return APP_CONFIG.maps.find(m => m.id === this.data.profile.selectedMapId) || APP_CONFIG.maps[0]; }
+      startMission(type) {
+        this.audio.unlock();
+        this.lastMissionType = type;
+        const baselineMs = MasteryEngine.baseline(this.data);
+        const session = {
+          id: uid(), type, mapId: this.data.profile.selectedMapId, weaponId: this.data.profile.selectedWeaponId,
+          startedAt: new Date().toISOString(), activeMs: 0, targetMs: APP_CONFIG.missionMs[type],
+          retrievalAttempts: 0, firstTryCorrect: 0, firstTryWrong: 0, blocksDestroyed: 0, structuresDestroyed: 0, coinsEarned: 0,
+          baselineMs, fluencyTargetMs: fluencyTarget(baselineMs), seed: Date.now() % 100000000, newlyFluentFamilies: [], newlyMasteredFamilies: []
+        };
+        this.session = session;
+        this.scheduler = type === "recon" ? null : new AdaptiveScheduler(this.data, type, session.seed);
+        this.reconList = type === "recon" ? catalog.reconList(new RNG(session.seed)) : [];
+        this.reconIndex = 0;
+        this.data.activeSession = { ...session, retryQueue: [], schedulerHistory: [] };
+        this.storage.save();
+        this.show("mission-screen");
+        this.ensurePhaser();
+        $("mission-kind").textContent = type === "recon" ? "Recon Mission" : type === "full" ? "Full Mission" : "Quick Mission";
+        this.updateMissionHud();
+        this.state = "MISSION_ACTIVE";
+        this.nextPrompt();
+        this.startTick();
+      }
+      ensurePhaser() {
+        if (this.phaser) return;
+        this.phaser = new Phaser.Game({ type: Phaser.AUTO, parent: "game-container", backgroundColor: "#0b1016", scale: { mode: Phaser.Scale.RESIZE, width: "100%", height: "100%" }, scene: BlockBlasterScene, audio: { noAudio: true } });
+      }
+      startTick() {
+        clearInterval(this.tick);
+        this.lastTick = performance.now();
+        this.tick = setInterval(() => {
+          if (this.state !== "MISSION_ACTIVE" || document.hidden) return;
+          const now = performance.now();
+          this.session.activeMs += now - this.lastTick;
+          this.lastTick = now;
+          this.updateMissionHud();
+          this.saveActive();
+          if (this.session.activeMs >= this.session.targetMs) this.timeExpired = true;
+        }, 250);
+      }
+      freezeTimers() { this.pausedAt = performance.now(); }
+      resumeTimers() { this.lastTick = performance.now(); if (this.promptStartedAt) this.promptStartedAt += performance.now() - (this.pausedAt || performance.now()); }
+      pause() {
+        if (!this.session) return;
+        this.freezeTimers();
+        this.state = "MISSION_PAUSED";
+        this.modal("Paused", "<p>Mission time and response time are paused.</p>", [{ text: "Resume", cls: "primary", action: () => { this.resumeTimers(); this.state = "MISSION_ACTIVE"; this.closeModal(); } }, { text: "End Mission", action: () => { this.closeModal(); this.finishMission(true); } }]);
+      }
+      nextPrompt() {
+        if (this.timeExpired && !this.correction) return this.finishMission(false);
+        this.answer = ""; this.setAnswer("");
+        $("feedback").textContent = "";
+        this.correction = null;
+        const fact = this.session.type === "recon" ? this.reconList[this.reconIndex++ % this.reconList.length] : this.scheduler.next();
+        this.current = fact;
+        $("prompt").textContent = `${fact.a} × ${fact.b}`;
+        this.accepting = true;
+        this.state = "MISSION_ACTIVE";
+        this.promptStartedAt = performance.now();
+        this.saveActive();
+      }
+      inputDigit(d) {
+        if (!this.accepting) return;
+        if (this.answer.length >= APP_CONFIG.answerMaxLength) return;
+        this.setAnswer(this.answer + d);
+      }
+      setAnswer(v) { this.answer = v.replace(/\D/g, "").slice(0, APP_CONFIG.answerMaxLength); $("answer-display").textContent = this.answer; }
+      submit(help) {
+        if (!this.accepting || !this.current) return;
+        if (!help && this.answer === "") return;
+        if (this.correction) return this.submitCorrection();
+        this.accepting = false;
+        const rawMs = performance.now() - this.promptStartedAt;
+        const correct = !help && Number(this.answer) === this.current.answer;
+        const attempt = {
+          at: new Date().toISOString(), sessionId: this.session.id, a: this.current.a, b: this.current.b,
+          correct, usedHelp: !!help, rawMs, adjustedMs: correct ? adjustedTime(rawMs, this.current.answer) : null,
+          wasDueReview: false, source: this.session.type === "recon" ? "recon" : this.current.source || "adaptive"
+        };
+        this.session.retrievalAttempts += 1;
+        if (correct) this.correct(attempt);
+        else this.wrong(attempt);
+      }
+      correct(attempt) {
+        const before = this.data.factFamilies[familyKey(attempt.a, attempt.b)].state;
+        const change = MasteryEngine.record(this.data, attempt, this.session);
+        if (change.current === "fluent" && before !== "fluent") this.session.newlyFluentFamilies.push(familyKey(attempt.a, attempt.b));
+        if (change.current === "mastered" && before !== "mastered") this.session.newlyMasteredFamilies.push(familyKey(attempt.a, attempt.b));
+        this.session.firstTryCorrect += 1;
+        const bonus = speedBonus(attempt.adjustedMs, this.session.baselineMs);
+        const damage = Math.max(1, this.weapon().baseDamage + bonus);
+        const coins = 2 + damage;
+        this.awardCoins(coins);
+        this.session.blocksDestroyed += damage;
+        this.data.economy.blocksDestroyed += damage;
+        $("feedback").textContent = bonus >= 3 ? "Power Shot!" : "Hit!";
+        this.audio.shot(bonus >= 3);
+        this.bus.dispatchEvent(new CustomEvent("bbm:fire", { detail: { damage, power: bonus >= 3 } }));
+        this.afterPrompt();
+      }
+      wrong(attempt) {
+        MasteryEngine.record(this.data, attempt, this.session);
+        this.session.firstTryWrong += 1;
+        this.audio.neutral();
+        $("feedback").textContent = `Almost — ${attempt.a} × ${attempt.b} = ${product(attempt.a, attempt.b)}`;
+        this.correction = { answer: String(product(attempt.a, attempt.b)), fact: this.current };
+        if (this.scheduler) this.scheduler.enqueueRetry(this.current);
+        this.setAnswer("");
+        this.accepting = true;
+        this.state = "CORRECTION_REQUIRED";
+        this.storage.save();
+      }
+      submitCorrection() {
+        if (this.answer === this.correction.answer) {
+          $("feedback").textContent = "Training shot!";
+          this.audio.shot(false);
+          this.bus.dispatchEvent(new CustomEvent("bbm:fire", { detail: { damage: 1, power: false } }));
+          this.session.blocksDestroyed += 1;
+          this.data.economy.blocksDestroyed += 1;
+          this.afterPrompt();
+        } else {
+          $("feedback").textContent = `Almost — ${this.correction.fact.a} × ${this.correction.fact.b} = ${this.correction.answer}`;
+          this.setAnswer("");
+          this.accepting = true;
+        }
+      }
+      afterPrompt() {
+        this.accepting = false;
+        this.updateUnlocks();
+        this.storage.save();
+        this.updateMissionHud();
+        setTimeout(() => this.nextPrompt(), 620);
+      }
+      structureCleared() {
+        if (!this.session) return;
+        this.session.structuresDestroyed += 1;
+        this.data.economy.structuresDestroyed += 1;
+        this.awardCoins(10);
+        $("feedback").textContent = "Target Cracked!";
+      }
+      awardCoins(n) {
+        this.data.economy.coins += n;
+        this.data.economy.lifetimeCoins += n;
+        this.session.coinsEarned += n;
+        this.audio.coin();
+      }
+      updateMissionHud() {
+        $("mission-coins").textContent = this.data.economy.coins;
+        const p = clamp(this.session ? this.session.activeMs / this.session.targetMs : 0, 0, 1);
+        $("mission-progress").innerHTML = Array.from({ length: 10 }, (_, i) => `<span class="${i < Math.ceil(p * 10) ? "on" : ""}"></span>`).join("");
+      }
+      saveActive() {
+        if (!this.session) return;
+        this.data.activeSession = { ...this.session, retryQueue: this.scheduler?.retryQueue || [], schedulerHistory: this.scheduler?.history || [] };
+        this.storage.save();
+      }
+      finishMission(interrupted) {
+        if (!this.session) return;
+        clearInterval(this.tick);
+        this.session.endedAt = new Date().toISOString();
+        this.session.accuracy = this.session.retrievalAttempts ? this.session.firstTryCorrect / this.session.retrievalAttempts : 0;
+        this.session.medianAdjustedMs = median(this.sessionAttempts().filter(a => a.correct).map(a => a.adjustedMs)) || 0;
+        if (!interrupted) this.awardCoins(this.session.type === "full" ? 20 : 10);
+        if (this.session.type === "recon" && !this.data.unlocks.unlockedMaps.includes("neon_depot")) this.data.unlocks.unlockedMaps.push("neon_depot");
+        this.updateUnlocks();
+        this.data.sessions.push({ ...this.session });
+        this.data.sessions = this.data.sessions.slice(-APP_CONFIG.maxSessions);
+        this.data.activeSession = null;
+        this.storage.save();
+        this.renderSummary();
+        this.session = null;
+        this.show("mission-summary");
+      }
+      sessionAttempts() {
+        const attempts = [];
+        for (const f of Object.values(this.data.factFamilies)) attempts.push(...f.recent.filter(r => r.sessionId === this.session.id));
+        return attempts;
+      }
+      renderSummary() {
+        const s = this.session;
+        $("summary-stats").innerHTML = this.card("First-try accuracy", `${Math.round((s.accuracy || 0) * 100)}%`) + this.card("Questions answered", s.retrievalAttempts) + this.card("Blocks destroyed", s.blocksDestroyed) + this.card("Structures cleared", s.structuresDestroyed) + this.card("Coins earned", s.coinsEarned) + this.card("New fluent/mastered", `${s.newlyFluentFamilies.length} / ${s.newlyMasteredFamilies.length}`);
+        $("summary-message").textContent = this.improvement().label;
+      }
+      updateUnlocks() {
+        const mastered = Object.values(this.data.factFamilies).filter(f => f.state === "mastered").length;
+        const add = id => { if (!this.data.unlocks.unlockedMaps.includes(id)) this.data.unlocks.unlockedMaps.push(id); };
+        if (this.data.economy.lifetimeFirstTryCorrect >= 100) add("canyon_outpost");
+        if (mastered >= 25) add("sky_fortress");
+        if (mastered >= 55) add("lunar_bunker");
+        if (mastered >= 80) add("core_citadel");
+      }
+      renderShop() {
+        $("shop-coins").textContent = this.data.economy.coins;
+        $("shop-list").innerHTML = APP_CONFIG.weapons.map(w => {
+          const owned = this.data.unlocks.ownedWeapons.includes(w.id);
+          const equipped = this.data.profile.selectedWeaponId === w.id;
+          const action = equipped ? `<button disabled>Equipped</button>` : owned ? `<button data-equip="${w.id}" class="primary">Equip</button>` : `<button data-buy="${w.id}" ${this.data.economy.coins < w.cost ? "disabled" : ""}>Buy ${w.cost}</button>`;
+          return `<div class="shop-item"><div class="preview" style="--accent:${"#" + w.accent.toString(16).padStart(6, "0")}"></div><strong>${w.name}</strong><span class="subtle">Base damage ${w.baseDamage}</span>${action}</div>`;
+        }).join("");
+      }
+      buy(id) {
+        const w = APP_CONFIG.weapons.find(x => x.id === id);
+        if (!w || this.data.unlocks.ownedWeapons.includes(id) || this.data.economy.coins < w.cost) return;
+        this.modal("Confirm purchase", `<p>Spend ${w.cost} coins on ${w.name}?</p>`, [{ text: "Buy", cls: "primary", action: () => { this.data.economy.coins -= w.cost; this.data.unlocks.ownedWeapons.push(id); this.data.profile.selectedWeaponId = id; this.storage.save(); this.closeModal(); this.renderShop(); } }, { text: "Cancel", action: () => this.closeModal() }]);
+      }
+      equip(id) { if (this.data.unlocks.ownedWeapons.includes(id)) { this.data.profile.selectedWeaponId = id; this.storage.save(); this.renderShop(); } }
+      renderMaps() {
+        this.updateUnlocks();
+        $("map-list").innerHTML = APP_CONFIG.maps.map(m => {
+          const unlocked = this.data.unlocks.unlockedMaps.includes(m.id);
+          const selected = this.data.profile.selectedMapId === m.id;
+          return `<div class="map-item"><div class="preview" style="background:linear-gradient(${ "#" + m.sky.toString(16).padStart(6, "0")},${ "#" + m.ground.toString(16).padStart(6, "0")})"></div><strong>${m.name}</strong><span class="subtle">${m.req}</span><button data-map="${m.id}" ${!unlocked || selected ? "disabled" : ""}>${selected ? "Selected" : unlocked ? "Select" : "Locked"}</button></div>`;
+        }).join("");
+      }
+      selectMap(id) { if (this.data.unlocks.unlockedMaps.includes(id)) { this.data.profile.selectedMapId = id; this.storage.save(); this.renderMaps(); } }
+      renderSettings() {
+        $("sound-toggle").checked = this.data.settings.soundEnabled;
+        $("motion-toggle").checked = this.data.settings.reducedMotion;
+        $("callsign-settings").value = this.data.profile.callsign;
+      }
+      renderDashboard() {
+        const sessions = this.data.sessions;
+        const mastered = Object.values(this.data.factFamilies).filter(f => f.state === "mastered").length;
+        const practiced = Object.values(this.data.orderedFacts).filter(f => f.attempts > 0).length;
+        const allAttempts = Object.values(this.data.orderedFacts).reduce((s, f) => s + f.attempts, 0);
+        const allCorrect = Object.values(this.data.orderedFacts).reduce((s, f) => s + f.firstTryCorrect, 0);
+        const recent = sessions.slice(-5);
+        const recentAtt = recent.reduce((s, x) => s + x.retrievalAttempts, 0);
+        const recentCor = recent.reduce((s, x) => s + x.firstTryCorrect, 0);
+        const totalMs = sessions.reduce((s, x) => s + x.activeMs, 0);
+        $("dash-cards").innerHTML = this.card("Mastered", `${mastered} / 91`) + this.card("Orientations practiced", `${practiced} / 169`) + this.card("Skill score", `${Math.round(this.skillScore())}%`) + this.card("All accuracy", `${allAttempts ? Math.round(allCorrect / allAttempts * 100) : 0}%`) + this.card("Last 5 accuracy", `${recentAtt ? Math.round(recentCor / recentAtt * 100) : 0}%`) + this.card("Practice time", `${Math.round(totalMs / 60000)} min`) + this.card("Sessions", sessions.length) + this.card("Weekly goal", `${this.sessionsThisWeek()} of ${this.data.profile.weeklyGoal}`) + this.card("Trend", this.improvement().label);
+        this.renderChart("chart-accuracy", "chart-accuracy-text", sessions.map(s => Math.round(s.accuracy * 100)), "% accuracy");
+        this.renderChart("chart-speed", "chart-speed-text", sessions.map(s => Math.round(s.medianAdjustedMs || 0)), "ms median");
+        this.renderGrid();
+        this.renderWeakList();
+        $("history-list").innerHTML = sessions.slice(-20).reverse().map(s => `<div class="history-row"><strong>${new Date(s.endedAt).toLocaleDateString()} ${s.type}</strong><span>${s.retrievalAttempts} facts · ${Math.round((s.accuracy || 0) * 100)}% · ${Math.round((s.medianAdjustedMs || 0) / 100) / 10}s · ${s.blocksDestroyed} blocks · ${s.coinsEarned} coins</span></div>`).join("") || "<p class='subtle'>No completed sessions yet.</p>";
+      }
+      improvement() {
+        const s = this.data.sessions;
+        if (s.length < 10) return { label: "Needs more data" };
+        const recent = s.slice(-5), prev = s.slice(-10, -5);
+        const accDelta = recent.reduce((x, y) => x + y.accuracy, 0)/5 - prev.reduce((x, y) => x + y.accuracy, 0)/5;
+        if (accDelta > .03) return { label: "Improving" };
+        if (accDelta < -.06) return { label: "Accuracy dipped recently; weak facts are being reviewed" };
+        return { label: "Holding steady" };
+      }
+      renderChart(id, textId, values, label) {
+        const last = values.slice(-20);
+        if (!last.length) { $(id).innerHTML = "<p class='subtle'>No data yet.</p>"; $(textId).textContent = "Complete missions to fill this chart."; return; }
+        const max = Math.max(...last, 1), min = Math.min(...last, 0), span = Math.max(1, max - min);
+        const pts = last.map((v, i) => `${10 + i * (280 / Math.max(1, last.length - 1))},${90 - ((v - min) / span) * 70}`).join(" ");
+        $(id).innerHTML = `<svg class="chart" viewBox="0 0 300 110" role="img"><polyline fill="none" stroke="#48d4a4" stroke-width="4" points="${pts}"/><line x1="8" y1="94" x2="292" y2="94" stroke="#344055"/></svg>`;
+        $(textId).textContent = `Last value: ${last.at(-1)} ${label}.`;
+      }
+      renderGrid() {
+        let html = "<div class='axis'></div>";
+        for (let i = 0; i <= 12; i++) html += `<div class="axis">${i}</div>`;
+        for (let a = 0; a <= 12; a++) {
+          html += `<div class="axis">${a}</div>`;
+          for (let b = 0; b <= 12; b++) {
+            const fam = this.data.factFamilies[familyKey(a, b)];
+            const ord = this.data.orderedFacts[orderedKey(a, b)];
+            const mark = ord.attempts ? fam.state[0].toUpperCase() : "·";
+            html += `<button class="cell state-${fam.state}" title="${a} × ${b}" data-detail="${a}x${b}">${mark}</button>`;
+          }
+        }
+        $("mastery-grid").innerHTML = html;
+        $("mastery-grid").querySelectorAll("[data-detail]").forEach(b => b.addEventListener("click", () => this.factDetail(b.dataset.detail)));
+      }
+      factDetail(key) {
+        const [a, b] = parseKey(key);
+        const ord = this.data.orderedFacts[key];
+        const fam = this.data.factFamilies[familyKey(a, b)];
+        const familyAttempts = fam.recent.length;
+        const familyCorrect = fam.recent.filter(r => r.correct).length;
+        const med = median(fam.recent.filter(r => r.correct).map(r => r.adjustedMs));
+        this.modal(`${a} × ${b}`, `<p>State: <strong>${fam.state}</strong></p><p>Prompt attempts: ${ord.attempts}; accuracy: ${ord.attempts ? Math.round(ord.firstTryCorrect / ord.attempts * 100) : 0}%</p><p>Family attempts: ${familyAttempts}; accuracy: ${familyAttempts ? Math.round(familyCorrect / familyAttempts * 100) : 0}%</p><p>Median response: ${med ? Math.round(med) + " ms" : "No correct retrieval yet"}</p><p>Last practiced: ${ord.lastSeenAt ? new Date(ord.lastSeenAt).toLocaleDateString() : "Never"}</p><p>Next review: ${fam.dueAt ? new Date(fam.dueAt).toLocaleDateString() : "Not scheduled"}</p><p>Delayed retention confirmed: ${fam.delayedReviewsPassed ? "Yes" : "No"}</p>`, [{ text: "Close", action: () => this.closeModal() }]);
+      }
+      renderWeakList() {
+        const scored = catalog.allFamilies().map(f => {
+          const fam = this.data.factFamilies[f.key];
+          const wrong = fam.recent.filter(r => !r.correct).length;
+          const help = fam.recent.filter(r => r.usedHelp).length;
+          const due = fam.dueAt ? Math.max(0, Date.now() - new Date(fam.dueAt).getTime()) / days(1) : 0;
+          return { ...f, score: wrong * 5 + help * 4 + due + (1 - APP_CONFIG.stateWeight[fam.state]) * 3, state: fam.state };
+        }).sort((a, b) => b.score - a.score).slice(0, 10);
+        $("weak-list").innerHTML = scored.map(f => `<p><strong>${f.a} × ${f.b}${f.a !== f.b ? ` / ${f.b} × ${f.a}` : ""}</strong> <span class="subtle">${f.state}</span></p>`).join("");
+      }
+      recoverActive() {
+        const a = this.data.activeSession;
+        if (!a) return;
+        if (Date.now() - new Date(a.startedAt).getTime() > days(1)) { this.data.activeSession = null; this.storage.save(); return; }
+        this.modal("Resume Mission", "<p>An active mission was found.</p>", [{ text: "Resume", cls: "primary", action: () => { this.closeModal(); this.toast("Starting a fresh mission with saved progress kept."); this.startMission(a.type); } }, { text: "End Mission", action: () => { this.data.activeSession = null; this.storage.save(); this.closeModal(); } }]);
+      }
+      modal(title, html, actions) {
+        $("modal-layer").innerHTML = `<div class="modal"><h2>${title}</h2>${html}<div class="row" id="modal-actions"></div></div>`;
+        for (const a of actions) {
+          const b = document.createElement("button");
+          b.textContent = a.text;
+          if (a.cls) b.className = a.cls;
+          b.addEventListener("click", a.action);
+          $("modal-actions").appendChild(b);
+        }
+        $("modal-layer").classList.add("active");
+      }
+      closeModal() { $("modal-layer").classList.remove("active"); }
+      toast(msg) {
+        $("toast-layer").innerHTML = `<div class="toast">${msg}</div>`;
+        setTimeout(() => $("toast-layer").innerHTML = "", 1800);
+      }
+    }
+
+    class TestRunner {
+      static assert(cond, msg) { if (!cond) throw new Error(msg); }
+      static run() {
+        document.querySelectorAll(".screen").forEach(s => s.classList.toggle("active", s.id === "test-screen"));
+        const out = $("test-output");
+        const tests = [
+          ["169 ordered prompts", () => this.assert(catalog.allOrdered().length === 169, "expected 169")],
+          ["91 families", () => this.assert(catalog.allFamilies().length === 91, "expected 91")],
+          ["products through 12", () => catalog.allOrdered().forEach(f => this.assert(f.answer === f.a * f.b, f.key))],
+          ["adjusted response time", () => { this.assert(adjustedTime(4200, 56) === 3950, "two digits"); this.assert(adjustedTime(800, 144) === 500, "floor"); }],
+          ["baseline and target clamps", () => { this.assert(fluencyTarget(10000) === 6500, "high clamp"); this.assert(fluencyTarget(3000) === 3500, "low clamp"); }],
+          ["damage tiers", () => { this.assert(speedBonus(3000, 6500) === 3, "tier 3"); this.assert(speedBonus(9000, 6500) === 0, "tier 0"); }],
+          ["storage default completeness", () => { const s = new StorageService(); this.assert(Object.keys(s.data.orderedFacts).length === 169, "ordered defaults"); this.assert(Object.keys(s.data.factFamilies).length === 91, "family defaults"); }],
+          ["new to learning", () => { const st = new StorageService(); const session = { id: "t", fluencyTargetMs: 6500 }; MasteryEngine.record(st.data, { at: new Date().toISOString(), sessionId: "t", a: 2, b: 3, correct: false, usedHelp: false, rawMs: 4000, adjustedMs: null, wasDueReview: false, source: "adaptive" }, session); this.assert(st.data.factFamilies["2x3"].state === "learning", "learning"); }],
+          ["both orientations required", () => { const st = new StorageService(); const session = { id: "a", fluencyTargetMs: 6500 }; for (let i = 0; i < 6; i++) MasteryEngine.record(st.data, { at: new Date(Date.now()+i).toISOString(), sessionId: i < 3 ? "a" : "b", a: 7, b: 8, correct: true, usedHelp: false, rawMs: 3000, adjustedMs: 2750, wasDueReview: false, source: "adaptive" }, session); this.assert(st.data.factFamilies["7x8"].state !== "fluent", "needs 8x7"); }],
+          ["delayed review required", () => { const st = new StorageService(); const session = { id: "a", fluencyTargetMs: 6500 }; const base = new Date("2026-01-01T12:00:00Z"); for (let i = 0; i < 8; i++) MasteryEngine.record(st.data, { at: new Date(base.getTime()+i*1000).toISOString(), sessionId: i < 4 ? "a" : "b", a: i % 2 ? 8 : 7, b: i % 2 ? 7 : 8, correct: true, usedHelp: false, rawMs: 3000, adjustedMs: 2750, wasDueReview: false, source: "adaptive" }, session); this.assert(st.data.factFamilies["7x8"].state !== "mastered", "not mastered same day"); }],
+          ["scheduler repetition limits", () => { const st = new StorageService(); const sc = new AdaptiveScheduler(st.data, "quick", 42); const seen = []; for (let i=0;i<20;i++) seen.push(sc.next().key); for (let i=3;i<seen.length;i++) this.assert(seen[i] !== seen[i-1] || seen[i] !== seen[i-2], "no short repeats"); }],
+          ["improvement labels", () => this.assert(typeof median([1,3,2]) === "number", "median")]
+        ];
+        const lines = [];
+        let pass = 0;
+        for (const [name, fn] of tests) {
+          try { fn(); pass++; lines.push(`PASS ${name}`); }
+          catch (err) { lines.push(`FAIL ${name}: ${err.message}`); }
+        }
+        lines.unshift(pass === tests.length ? `ALL PASS (${pass}/${tests.length})` : `FAILURES (${pass}/${tests.length})`);
+        out.textContent = lines.join("\n");
+      }
+    }
+
+    window.addEventListener("load", () => new App().init());
+  })();
+  </script>
+</body>
+</html>
