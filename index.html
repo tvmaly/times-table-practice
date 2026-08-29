@@ -326,6 +326,16 @@
       maxRecent: 12,
       maxSessions: 200,
       maxDailyAggregates: 365,
+      scheduler: {
+        quickNewFamilyLimit: 10,
+        fullNewFamilyLimit: 16,
+        quickEarlyPromptWindow: 15,
+        quickEarlyDistinctFamilies: 10,
+        fullEarlyPromptWindow: 25,
+        fullEarlyDistinctFamilies: 16,
+        orderedRepeatGap: 4,
+        earlyFamilyRepeatCap: 2
+      },
       weapons: [
         { id: "pulse_mk1", name: "Pulse Blaster Mk I", cost: 0, baseDamage: 1, accent: 0x48d4a4 },
         { id: "twin_pulse", name: "Twin Pulse", cost: 180, baseDamage: 2, accent: 0x74b6ff },
@@ -600,7 +610,9 @@
         this.newUsed = new Set();
         this.focus = this.buildFocus();
       }
-      newLimit() { return this.type === "full" ? 4 : 2; }
+      newLimit() { return this.type === "full" ? APP_CONFIG.scheduler.fullNewFamilyLimit : APP_CONFIG.scheduler.quickNewFamilyLimit; }
+      varietyWindow() { return this.type === "full" ? APP_CONFIG.scheduler.fullEarlyPromptWindow : APP_CONFIG.scheduler.quickEarlyPromptWindow; }
+      varietyTarget() { return this.type === "full" ? APP_CONFIG.scheduler.fullEarlyDistinctFamilies : APP_CONFIG.scheduler.quickEarlyDistinctFamilies; }
       buildFocus() {
         const now = Date.now();
         const families = Object.keys(this.data.factFamilies);
@@ -608,19 +620,51 @@
           const f = this.data.factFamilies[k];
           return f.state !== "new" && ((f.dueAt && new Date(f.dueAt).getTime() <= now) || f.recent.slice(-4).some(r => !r.correct));
         }).slice(0, 6);
-        const news = families.filter(k => this.data.factFamilies[k].state === "new").slice(0, this.newLimit());
+        const news = families.filter(k => this.data.factFamilies[k].state === "new").slice(0, this.varietyTarget());
         const warm = families.filter(k => ["fluent", "mastered"].includes(this.data.factFamilies[k].state)).slice(0, 2);
         return new Set([...weak, ...news, ...warm]);
       }
       enqueueRetry(fact) {
         this.retryQueue.push({ ...fact, wait: this.history.length + this.rng.int(APP_CONFIG.retryGapMin, APP_CONFIG.retryGapMax) });
       }
+      familyCounts() {
+        return this.history.reduce((counts, fact) => {
+          counts[fact.familyKey] = (counts[fact.familyKey] || 0) + 1;
+          return counts;
+        }, {});
+      }
+      distinctFamilies() {
+        return new Set(this.history.map(f => f.familyKey)).size;
+      }
       blocked(family) {
         const [a, b] = parseKey(family.key);
-        const recent = this.history.slice(-3);
-        if (recent.some(f => f.key === orderedKey(a, b)) || recent.some(f => f.key === orderedKey(b, a))) return true;
-        if (this.history.slice(-3).length === 3 && this.history.slice(-3).every(f => f.a === a)) return true;
+        const recentOrdered = this.history.slice(-APP_CONFIG.scheduler.orderedRepeatGap);
+        if (recentOrdered.some(f => f.key === orderedKey(a, b)) || recentOrdered.some(f => f.key === orderedKey(b, a))) return true;
+        const recentFactor = this.history.slice(-3);
+        if (recentFactor.length === 3 && recentFactor.every(f => f.a === a)) return true;
         return false;
+      }
+      candidateFamilies() {
+        let families = catalog.allFamilies().filter(f => !this.blocked(f));
+        if (!families.length) families = catalog.allFamilies();
+
+        const counts = this.familyCounts();
+        const early = this.history.length < this.varietyWindow();
+        const needsDistinct = this.distinctFamilies() < this.varietyTarget();
+        if (early && needsDistinct) {
+          const unseen = families.filter(f => !counts[f.key]);
+          if (unseen.length) families = unseen;
+          else {
+            const underCap = families.filter(f => (counts[f.key] || 0) < APP_CONFIG.scheduler.earlyFamilyRepeatCap);
+            if (underCap.length) families = underCap;
+          }
+        }
+
+        if (this.newUsed.size >= this.newLimit()) {
+          const nonNew = families.filter(f => this.data.factFamilies[f.key].state !== "new");
+          if (nonNew.length) families = nonNew;
+        }
+        return families.length ? families : catalog.allFamilies();
       }
       chooseOrientation(family) {
         const [a, b] = parseKey(family.key);
@@ -642,19 +686,17 @@
           return fact;
         }
         const now = Date.now();
-        let families = catalog.allFamilies().filter(f => !this.blocked(f));
-        if (!families.length) families = catalog.allFamilies();
-        if (this.newUsed.size >= this.newLimit()) {
-          const nonNew = families.filter(f => this.data.factFamilies[f.key].state !== "new");
-          families = nonNew.length ? nonNew : families;
-        }
-        if (!families.length) families = catalog.allFamilies();
+        const counts = this.familyCounts();
+        const families = this.candidateFamilies();
         const chosen = this.rng.weighted(families, f => {
           const state = this.data.factFamilies[f.key];
           let w = state.state === "new" ? 10 : state.state === "learning" ? 35 : state.state === "developing" ? 22 : state.state === "fluent" ? 15 : 8;
           if (state.dueAt && new Date(state.dueAt).getTime() <= now) w += 35;
           if (state.recent.slice(-4).some(r => !r.correct || r.usedHelp)) w += 30;
           if (this.focus.has(f.key)) w *= 1.8;
+          if (!counts[f.key] && this.history.length < this.varietyWindow()) w *= 4;
+          if (counts[f.key]) w /= 1 + counts[f.key] * 3;
+          if (this.history.slice(-6).some(h => h.familyKey === f.key)) w *= .15;
           if ((f.a <= 1 || f.b <= 1) && ["developing", "fluent", "mastered"].includes(state.state)) w *= .25;
           return w;
         });
@@ -1212,7 +1254,63 @@
           ["new to learning", () => { const st = new StorageService(); const session = { id: "t", fluencyTargetMs: 6500 }; MasteryEngine.record(st.data, { at: new Date().toISOString(), sessionId: "t", a: 2, b: 3, correct: false, usedHelp: false, rawMs: 4000, adjustedMs: null, wasDueReview: false, source: "adaptive" }, session); this.assert(st.data.factFamilies["2x3"].state === "learning", "learning"); }],
           ["both orientations required", () => { const st = new StorageService(); const session = { id: "a", fluencyTargetMs: 6500 }; for (let i = 0; i < 6; i++) MasteryEngine.record(st.data, { at: new Date(Date.now()+i).toISOString(), sessionId: i < 3 ? "a" : "b", a: 7, b: 8, correct: true, usedHelp: false, rawMs: 3000, adjustedMs: 2750, wasDueReview: false, source: "adaptive" }, session); this.assert(st.data.factFamilies["7x8"].state !== "fluent", "needs 8x7"); }],
           ["delayed review required", () => { const st = new StorageService(); const session = { id: "a", fluencyTargetMs: 6500 }; const base = new Date("2026-01-01T12:00:00Z"); for (let i = 0; i < 8; i++) MasteryEngine.record(st.data, { at: new Date(base.getTime()+i*1000).toISOString(), sessionId: i < 4 ? "a" : "b", a: i % 2 ? 8 : 7, b: i % 2 ? 7 : 8, correct: true, usedHelp: false, rawMs: 3000, adjustedMs: 2750, wasDueReview: false, source: "adaptive" }, session); this.assert(st.data.factFamilies["7x8"].state !== "mastered", "not mastered same day"); }],
-          ["scheduler repetition limits", () => { const st = new StorageService(); const sc = new AdaptiveScheduler(st.data, "quick", 42); const seen = []; for (let i=0;i<20;i++) seen.push(sc.next().key); for (let i=3;i<seen.length;i++) this.assert(seen[i] !== seen[i-1] || seen[i] !== seen[i-2], "no short repeats"); }],
+          ["quick scheduler early variety", () => {
+            const st = new StorageService();
+            const sc = new AdaptiveScheduler(st.data, "quick", 42);
+            const seen = [];
+            for (let i = 0; i < 15; i++) seen.push(sc.next());
+            this.assert(new Set(seen.map(f => f.familyKey)).size >= 10, "quick should show at least 10 families in 15 prompts");
+          }],
+          ["full scheduler early variety", () => {
+            const st = new StorageService();
+            const sc = new AdaptiveScheduler(st.data, "full", 42);
+            const seen = [];
+            for (let i = 0; i < 25; i++) seen.push(sc.next());
+            this.assert(new Set(seen.map(f => f.familyKey)).size >= 16, "full should show at least 16 families in 25 prompts");
+          }],
+          ["scheduler ordered repeat gap", () => {
+            const st = new StorageService();
+            const sc = new AdaptiveScheduler(st.data, "quick", 42);
+            const seen = [];
+            for (let i = 0; i < 40; i++) seen.push(sc.next());
+            for (let i = 1; i < seen.length; i++) {
+              const recent = seen.slice(Math.max(0, i - APP_CONFIG.scheduler.orderedRepeatGap), i);
+              this.assert(!recent.some(f => f.key === seen[i].key), `tight repeat ${seen[i].key}`);
+            }
+          }],
+          ["scheduler retry gap", () => {
+            const st = new StorageService();
+            const sc = new AdaptiveScheduler(st.data, "quick", 7);
+            const missed = sc.next();
+            sc.enqueueRetry(missed);
+            const seen = [];
+            for (let i = 0; i < 8; i++) seen.push(sc.next());
+            const retryIndex = seen.findIndex(f => f.source === "retry" && f.key === missed.key);
+            this.assert(retryIndex >= 3 && retryIndex <= 5, `retry index ${retryIndex}`);
+          }],
+          ["scheduler weak facts stay prioritized", () => {
+            const st = new StorageService();
+            for (const f of Object.values(st.data.factFamilies)) f.state = "developing";
+            const weak = st.data.factFamilies["6x7"];
+            weak.dueAt = new Date(Date.now() - days(3)).toISOString();
+            weak.recent = [{ at: new Date().toISOString(), sessionId: "old", a: 6, b: 7, correct: false, usedHelp: true, rawMs: 5000, adjustedMs: null, wasDueReview: false, source: "adaptive" }];
+            const sc = new AdaptiveScheduler(st.data, "full", 99);
+            const counts = {};
+            for (let i = 0; i < 90; i++) {
+              const fact = sc.next();
+              counts[fact.familyKey] = (counts[fact.familyKey] || 0) + 1;
+            }
+            this.assert((counts["6x7"] || 0) > 1, "weak due fact should recur");
+          }],
+          ["scheduler first-factor limit", () => {
+            const st = new StorageService();
+            const sc = new AdaptiveScheduler(st.data, "full", 123);
+            const seen = [];
+            for (let i = 0; i < 50; i++) seen.push(sc.next());
+            for (let i = 3; i < seen.length; i++) {
+              this.assert(!(seen[i].a === seen[i - 1].a && seen[i].a === seen[i - 2].a && seen[i].a === seen[i - 3].a), "same first factor more than 3 times");
+            }
+          }],
           ["improvement labels", () => this.assert(typeof median([1,3,2]) === "number", "median")]
         ];
         const lines = [];
